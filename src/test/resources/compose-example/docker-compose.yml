@@ -1,0 +1,5 @@
+services:
+  hello-world:
+    image: alpine:latest
+    container_name: test-docker-compose-java
+    command: ["sh", "-c", "echo Hello; sleep 10"]
