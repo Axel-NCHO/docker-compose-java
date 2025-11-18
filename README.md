@@ -70,6 +70,6 @@ if (result.wasInterrupted()) {
 ## Notes
 
 * This library shells out to the local Docker Compose binary and relies on the user environment. It does not embed Compose or implement the Compose specification.  
-* This library currently supports only a subset of the Compose API (see supported commands and options). 
+* This library currently supports only a subset of the Compose API (see [supported commands and options](https://github.com/Axel-NCHO/docker-compose-java?tab=readme-ov-file#features)). 
 
 This library shells out to the local Docker Compose binary and relies on the user environment. It does not embed Compose or implement the Compose specification.
