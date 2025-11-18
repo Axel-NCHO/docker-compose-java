@@ -108,7 +108,6 @@ class DockerComposeCmdImpl implements DockerComposeCmd.Exec {
     private List<@NotNull String> buildCommand(@NotNull String command, @NotNull String... args) {
         List<String> cmdList = new ArrayList<>();
 
-        // Docker Compose V2 uses "docker compose" not "docker-compose"
         cmdList.add("docker");
         cmdList.add("compose");
 
@@ -166,7 +165,7 @@ class DockerComposeCmdImpl implements DockerComposeCmd.Exec {
                     if (timedOut) {
                         shutdownHook.start();
                         shutdownHook.join();
-                        exitCode = 124;
+                        exitCode = 130;
                     } else
                         exitCode = process.exitValue();
                 }

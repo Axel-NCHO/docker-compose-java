@@ -9,12 +9,12 @@ import java.util.List;
 public interface DockerComposeCmd {
 
     /**
-     * Builder interface for constructing docker-compose commands
+     * Builder interface for constructing docker compose commands
      */
     interface Exec {
 
         /**
-         * Specify the compose file(s) to use
+         * Specify the compose file to use
          * @param file the compose file
          * @return this builder for chaining
          */
@@ -71,35 +71,35 @@ public interface DockerComposeCmd {
         Exec withTimeout(@NotNull Duration timeout);
 
         /**
-         * Execute 'docker-compose up' command
+         * Execute 'docker compose up' command
          * @return result of the command execution
          */
         @NotNull
         DockerComposeResult up();
 
         /**
-         * Execute 'docker-compose down' command
+         * Execute 'docker compose down' command
          * @return result of the command execution
          */
         @NotNull
         DockerComposeResult down();
 
         /**
-         * Execute 'docker-compose ps' command
+         * Execute 'docker compose ps' command
          * @return result of the command execution
          */
         @NotNull
         DockerComposeResult ps();
 
         /**
-         * Execute 'docker-compose logs' command
+         * Execute 'docker compose logs' command
          * @return result of the command execution
          */
         @NotNull
         DockerComposeResult logs();
 
         /**
-         * Execute a custom docker-compose command
+         * Execute a custom docker compose command
          * @param command the command to execute (e.g., "up", "down")
          * @param args additional arguments
          * @return result of the command execution

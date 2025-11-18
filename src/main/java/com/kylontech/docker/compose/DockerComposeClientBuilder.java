@@ -10,8 +10,8 @@ public class DockerComposeClientBuilder {
     private DockerComposeClientBuilder() {}
 
     /**
-     * Creates a default implementation of DockerCompose
-     * @return a new DockerCompose instance
+     * Creates a default implementation of DockerComposeClient
+     * @return a new DockerComposeClient instance
      */
     @NotNull
     static DockerComposeClientBuilder getInstance() {

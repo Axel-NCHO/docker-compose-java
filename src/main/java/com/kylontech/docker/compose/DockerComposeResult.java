@@ -5,7 +5,7 @@ import org.jetbrains.annotations.NotNull;
 public record DockerComposeResult(int exitCode, String output, boolean success, String executedCommand) {
 
     public boolean wasInterrupted() {
-        return exitCode == 124;
+        return exitCode == 130;
     }
 
     @Override
