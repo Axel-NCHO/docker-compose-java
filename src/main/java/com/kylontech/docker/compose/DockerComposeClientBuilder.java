@@ -14,7 +14,7 @@ public class DockerComposeClientBuilder {
      * @return a new DockerComposeClient instance
      */
     @NotNull
-    static DockerComposeClientBuilder getInstance() {
+    public static DockerComposeClientBuilder getInstance() {
         return INSTANCE;
     }
 

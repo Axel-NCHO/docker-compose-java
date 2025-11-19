@@ -1,117 +1,89 @@
 package com.kylontech.docker.compose;
 
+import com.kylontech.docker.compose.exception.DockerComposeBinaryNotFoundException;
+import com.kylontech.docker.compose.exception.DockerComposeException;
+import com.kylontech.docker.compose.exception.DockerComposeInterruptedException;
+import com.kylontech.docker.compose.exception.DockerComposeTimeoutException;
 import org.jetbrains.annotations.NotNull;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
-class DockerComposeCmdImpl implements DockerComposeCmd.Exec {
+abstract class DockerComposeCmdImpl<T extends DockerComposeCmdImpl<T>> extends DockerComposeCmd.Exec<T> {
 
     @NotNull
     private final List<@NotNull String> files = new ArrayList<>();
     private String projectName;
-    private boolean detached = false;
     @NotNull
     private final Map<@NotNull String, @NotNull String> environment = new HashMap<>();
     private File workingDirectory;
     private long timeout = -1;
 
-
     @Override
     @NotNull
-    public DockerComposeCmd.Exec withFile(@NotNull File file) {
+    public T withFile(@NotNull File file) {
         this.files.add(file.getAbsolutePath());
-        return this;
+        return self();
     }
 
     @Override
     @NotNull
-    public DockerComposeCmd.Exec withFiles(@NotNull List<File> files) {
+    public T withFiles(@NotNull List<File> files) {
         this.files.addAll(files.stream().map(File::getAbsolutePath).toList());
-        return this;
+        return self();
     }
 
     @Override
     @NotNull
-    public DockerComposeCmd.Exec withProjectName(@NotNull String projectName) {
+    public T withProjectName(@NotNull String projectName) {
         this.projectName = projectName;
-        return this;
+        return self();
     }
 
     @Override
     @NotNull
-    public DockerComposeCmd.Exec withDetached(boolean detached) {
-        this.detached = detached;
-        return this;
-    }
-
-    @Override
-    @NotNull
-    public DockerComposeCmd.Exec withEnv(@NotNull String key, @NotNull String value) {
+    public T withEnv(@NotNull String key, @NotNull String value) {
         this.environment.put(key, value);
-        return this;
+        return self();
     }
 
     @Override
     @NotNull
-    public DockerComposeCmd.Exec withWorkingDirectory(@NotNull File workingDir) {
+    public T withWorkingDirectory(@NotNull File workingDir) {
         this.workingDirectory = workingDir;
-        return this;
+        return self();
     }
 
     @Override
     @NotNull
-    public DockerComposeCmd.Exec withTimeout(@NotNull Duration timeout) {
+    public T withTimeout(@NotNull Duration timeout) {
         this.timeout = timeout.toMillis();
-        return this;
+        return self();
     }
 
-    @Override
     @NotNull
-    public DockerComposeResult up() {
-        List<String> args = new ArrayList<>();
-        if (detached) {
-            args.add("-d");
-        }
-        return exec("up", args.toArray(new String[0]));
-    }
-
-    @Override
-    @NotNull
-    public DockerComposeResult down() {
-        return exec("down");
-    }
-
-    @Override
-    @NotNull
-    public DockerComposeResult ps() {
-        return exec("ps");
-    }
-
-    @Override
-    @NotNull
-    public DockerComposeResult logs() {
-        return exec("logs");
-    }
-
-    @Override
-    @NotNull
-    public DockerComposeResult exec(@NotNull String command, String... args) {
-        List<String> cmdList = buildCommand(command, args);
+    public final DockerComposeResult exec() throws DockerComposeException {
+        List<String> cmdList = buildCommand();
         return executeCommand(cmdList);
     }
 
     @NotNull
-    private List<@NotNull String> buildCommand(@NotNull String command, @NotNull String... args) {
+    private List<@NotNull String> buildCommand() {
         List<String> cmdList = new ArrayList<>();
 
         cmdList.add("docker");
         cmdList.add("compose");
 
-        // Add global options before the command (up/down/etc)
+        // Add global options before the command
         for (String file : files) {
             cmdList.add("--file");
             cmdList.add(file);
@@ -122,17 +94,18 @@ class DockerComposeCmdImpl implements DockerComposeCmd.Exec {
             cmdList.add(projectName);
         }
 
-        // Add the main command (up, down, etc.)
-        cmdList.add(command);
-
-        // Add command-specific arguments
-        Collections.addAll(cmdList, args);
+        buildSubCommand(cmdList);
 
         return cmdList;
     }
 
+    /**
+     * Add command and command-specific options. */
+    abstract protected void buildSubCommand(final @NotNull List<@NotNull String> cmdList);
+
     @NotNull
-    private DockerComposeResult executeCommand(@NotNull List<@NotNull String> cmdList) {
+    private DockerComposeResult executeCommand(final @NotNull List<@NotNull String> cmdList)
+            throws DockerComposeException {
         Process process;
         try {
             ProcessBuilder pb = new ProcessBuilder(cmdList);
@@ -147,9 +120,13 @@ class DockerComposeCmdImpl implements DockerComposeCmd.Exec {
             }
 
             // Inherit IO for foreground mode. This allows Ctrl+C to work.
-            pb.inheritIO();
+            // Removed so we can capture stdout/stderr of the process asynchronously.
+            // pb.inheritIO();
 
             process = pb.start();
+
+            ProcessOutputGobbler outputGobbler = new ProcessOutputGobbler(process);
+            outputGobbler.start();
 
             // Add shutdown hook to clean up on interruption
             Thread shutdownHook = getShutdownHook(process);
@@ -170,25 +147,34 @@ class DockerComposeCmdImpl implements DockerComposeCmd.Exec {
                         exitCode = process.exitValue();
                 }
                 Runtime.getRuntime().removeShutdownHook(shutdownHook);
+                outputGobbler.stop();
+                String stdout = outputGobbler.getStdout();
+                String stderr = outputGobbler.getStderr();
 
-                String message = timedOut
-                        ? "Command timed out after " + Duration.ofMillis(timeout).toSeconds() + " seconds"
-                        : "Command executed successfully";
-
-                return new DockerComposeResult(
+                DockerComposeResult result = new DockerComposeResult(
                         exitCode,
-                        message,
-                        exitCode == 0,
+                        stdout,
+                        stderr,
                         String.join(" ", cmdList)
                 );
+                if (timedOut) {
+                    throw new DockerComposeTimeoutException(
+                            "Command timed out after " + Duration.ofMillis(timeout).toSeconds() + " seconds",
+                            result
+                    );
+                }
+                return result;
             } catch (InterruptedException e) {
                 process.destroy();
                 Thread.currentThread().interrupt();
-                return new DockerComposeResult(
-                        130, // Standard exit code for SIGINT
-                        "Command interrupted by user",
-                        false,
-                        String.join(" ", cmdList)
+                throw new DockerComposeInterruptedException(
+                        "command interrupted",
+                        e,
+                        new DockerComposeResult(
+                                process.exitValue(), // Standard exit code for SIGINT
+                                outputGobbler.getStdout(),
+                                outputGobbler.getStderr(),
+                                String.join(" ", cmdList))
                 );
             } finally {
                 try {
@@ -199,12 +185,7 @@ class DockerComposeCmdImpl implements DockerComposeCmd.Exec {
             }
 
         } catch (IOException e) {
-            return new DockerComposeResult(
-                    -1,
-                    "Error executing command: " + e.getMessage(),
-                    false,
-                    String.join(" ", cmdList)
-            );
+            throw new DockerComposeBinaryNotFoundException("docker compose not found on host");
         }
     }
 
@@ -215,7 +196,7 @@ class DockerComposeCmdImpl implements DockerComposeCmd.Exec {
                 process.destroy();
                 try {
                     // Give it a moment to terminate gracefully
-                    if (!process.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)) {
+                    if (!process.waitFor(5, TimeUnit.SECONDS)) {
                         process.destroyForcibly();
                     }
                 } catch (InterruptedException e) {
@@ -223,5 +204,56 @@ class DockerComposeCmdImpl implements DockerComposeCmd.Exec {
                 }
             }
         });
+    }
+}
+
+class ProcessOutputGobbler {
+    @NotNull
+    private final Process process;
+    @NotNull
+    private final Thread outThread;
+    @NotNull
+    private final Thread errThread;
+    @NotNull
+    private final ByteArrayOutputStream stdout = new ByteArrayOutputStream();
+    @NotNull
+    private final ByteArrayOutputStream stderr = new ByteArrayOutputStream();
+
+    public ProcessOutputGobbler(final @NotNull Process process) {
+        this.process = process;
+        this.outThread = new Thread(() -> {
+            try (InputStream is = this.process.getInputStream()) {
+                is.transferTo(stdout);
+            } catch (IOException ignored) {}
+        });
+        outThread.setDaemon(true);
+        this.errThread = new Thread(() -> {
+            try (InputStream es = this.process.getErrorStream()) {
+                es.transferTo(stderr);
+            } catch (IOException ignored) {}
+        });
+        errThread.setDaemon(true);
+    }
+
+    public void start() {
+        this.outThread.start();
+        this.errThread.start();
+    }
+
+    public void stop() throws InterruptedException, IOException {
+        this.outThread.join();
+        this.stdout.close();
+        this.errThread.join();
+        this.stderr.close();
+    }
+
+    @NotNull
+    public String getStdout() {
+        return this.stdout.toString(StandardCharsets.UTF_8);
+    }
+
+    @NotNull
+    public String getStderr() {
+        return this.stderr.toString(StandardCharsets.UTF_8);
     }
 }

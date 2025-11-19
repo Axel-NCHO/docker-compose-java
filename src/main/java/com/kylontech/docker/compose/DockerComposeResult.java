@@ -2,9 +2,12 @@ package com.kylontech.docker.compose;
 
 import org.jetbrains.annotations.NotNull;
 
-public record DockerComposeResult(int exitCode, String output, boolean success, String executedCommand) {
+public record DockerComposeResult(int exitCode, String stdout, String stderr, String executedCommand) {
 
-    public boolean wasInterrupted() {
+    public boolean success() {
+        return exitCode == 0;
+    }
+    public boolean interrupted() {
         return exitCode == 130;
     }
 
@@ -13,9 +16,9 @@ public record DockerComposeResult(int exitCode, String output, boolean success, 
     public String toString() {
         return "DockerComposeResult{" +
                 "exitCode=" + exitCode +
-                ", success=" + success +
                 ", command='" + executedCommand + '\'' +
-                ", output='" + output + '\'' +
+                ", stdout='" + stdout + '\'' +
+                ", stderr='" + stderr + '\'' +
                 '}';
     }
 }
