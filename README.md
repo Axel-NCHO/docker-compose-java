@@ -21,9 +21,9 @@ Create a client through the builder.
 ```java
 DockerComposeClient client = DockerComposeClientBuilder.getInstance().build();
 
-DockerComposeResult result = client.dockerComposeCmd()
+DockerComposeResult result = client.upCmd()
     .withDetached(true)
-    .up();
+    .exec();
 
 if (result.success()) {
     // containers started
@@ -33,9 +33,9 @@ if (result.success()) {
 ## Selecting a Compose file
 
 ```java
-DockerComposeResult result = client.dockerComposeCmd()
+DockerComposeResult result = client.upCmd()
     .withFile(new File("docker-compose.yml"))
-    .up();
+    .exec();
 ```
 
 Using both a file and a working directory is supported.
@@ -43,10 +43,10 @@ Using both a file and a working directory is supported.
 ## Setting environment variables
 
 ```java
-DockerComposeResult result = client.dockerComposeCmd()
+DockerComposeResult result = client.upCmd()
     .withFile(new File("docker-compose.yml"))
     .withEnv("TEST_VAR", "value")
-    .up();
+    .exec();
 ```
 
 Variables are passed directly to the Compose process.
@@ -56,11 +56,11 @@ Variables are passed directly to the Compose process.
 A timeout stops the Compose process if it exceeds the given duration and marks the result as interrupted.
 
 ```java
-DockerComposeResult result = client.dockerComposeCmd()
+DockerComposeResult result = client.upCmd()
     .withFile(new File("docker-compose.yml"))
     .withTimeout(Duration.ofMillis(200))
     .withDetached(false)  // optional, this is the default.
-    .up();
+    .exec();
 
 if (result.wasInterrupted()) {
     // timed out
